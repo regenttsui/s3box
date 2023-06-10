@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
+// BucketCleaner
+// TODO modify print of result and error
 type BucketCleaner struct {
 	svc          *s3.S3
 	deletedCount uint64
@@ -24,23 +27,22 @@ func NewBucketCleaner(svc *s3.S3) *BucketCleaner {
 	return c
 }
 
-// EmptyBucket is to empty objects in the bucket concurrently
-func (c *BucketCleaner) EmptyBucket(bucketName string, workerNum, objChanCap, multiDelNum int, versioned, deleteBucket bool) {
+// EmptyBucket is to empty objects in the bucket concurrently.
+// objChanCap is the capacity of channel to store the objects from listObjs
+// multiDelNum decides whether to delete multiple objects in a request
+// TODO 增加清理分片
+func (c *BucketCleaner) EmptyBucket(bucketName string, deleteWorkerNum, objChanCap, multiDelNum int, versioned, deleteBucket bool) error {
 	var wg sync.WaitGroup
-	wg.Add(workerNum + 1)
+	wg.Add(deleteWorkerNum + 1)
 	startTime := time.Now()
 	go c.crontabPrintResults(startTime)
 	// objChannel存放实际的对象名
-	objChannel := make(chan string, objChanCap)
+	objChannel := make(chan s3.ObjectIdentifier, objChanCap)
 	// listObjs并将对象名放入objChannel
-	if versioned {
-		//TODO list versions
-	} else {
-		go c.listObjsWorker(objChannel, bucketName)
-	}
+	go c.listObjsWorker(objChannel, bucketName, versioned)
 
 	// 并发删除对象
-	for i := 0; i < workerNum; i++ {
+	for i := 0; i < deleteWorkerNum; i++ {
 		if multiDelNum > 0 {
 			go func() {
 				defer wg.Done()
@@ -62,10 +64,29 @@ func (c *BucketCleaner) EmptyBucket(bucketName string, workerNum, objChanCap, mu
 		}
 		_, err := c.svc.DeleteBucket(deleteBucketInput)
 		if err != nil {
-			fmt.Printf("fail to delete bucket. %v\n", err)
+			return err
 		}
 	}
+	return nil
+}
 
+// DeleteAllBuckets delete all buckets or all buckets contain a specified string of a user
+func (c *BucketCleaner) DeleteAllBuckets(containedStr string) error {
+	listBucketsInput := &s3.ListBucketsInput{}
+	listBucketsOutput, err := c.svc.ListBuckets(listBucketsInput)
+	if err != nil {
+		return err
+	}
+	for _, b := range listBucketsOutput.Buckets {
+		if containedStr != "" {
+			if strings.Contains(*b.Name, containedStr) {
+				go c.EmptyBucket(*b.Name, 3, 1000, 1000, true, true)
+			}
+		} else {
+			go c.EmptyBucket(*b.Name, 3, 1000, 1000, true, true)
+		}
+	}
+	return nil
 }
 
 // 定时打印任务+每秒更新状态
@@ -83,11 +104,12 @@ func (c *BucketCleaner) crontabPrintResults(startTime time.Time) {
 	}
 }
 
-func (c *BucketCleaner) deleteObjsWorker(objChannel chan string, bucketName string, multiDelNum int) {
+func (c *BucketCleaner) deleteObjsWorker(objChannel chan s3.ObjectIdentifier, bucketName string, multiDelNum int) {
 	objs := make([]*s3.ObjectIdentifier, 0, multiDelNum)
 	for obj := range objChannel {
 		objId := s3.ObjectIdentifier{
-			Key: aws.String(obj),
+			Key:       obj.Key,
+			VersionId: obj.VersionId,
 		}
 		objs = append(objs, &objId)
 		if len(objs) < multiDelNum {
@@ -117,11 +139,12 @@ func (c *BucketCleaner) deleteObjsWorker(objChannel chan string, bucketName stri
 	}
 }
 
-func (c *BucketCleaner) deleteObjWorker(objChannel chan string, bucketName string) {
+func (c *BucketCleaner) deleteObjWorker(objChannel chan s3.ObjectIdentifier, bucketName string) {
 	for obj := range objChannel {
 		deleteObjectInput := &s3.DeleteObjectInput{
-			Bucket: aws.String(bucketName),
-			Key:    aws.String(obj),
+			Bucket:    aws.String(bucketName),
+			Key:       obj.Key,
+			VersionId: obj.VersionId,
 		}
 
 		_, err := c.svc.DeleteObject(deleteObjectInput)
@@ -138,32 +161,67 @@ func (c *BucketCleaner) deleteObjWorker(objChannel chan string, bucketName strin
 	}
 }
 
-func (c *BucketCleaner) listObjsWorker(objChannel chan string, bucketName string) {
+func (c *BucketCleaner) listObjsWorker(objChannel chan s3.ObjectIdentifier, bucketName string, versioned bool) {
 	fmt.Printf("listing buckets %v\n", bucketName)
-	listObjectsInput := &s3.ListObjectsInput{
-		Bucket: aws.String(bucketName),
-		Marker: aws.String(""),
-	}
-	ListObjectsOutput, err := c.svc.ListObjects(listObjectsInput)
-	if err != nil {
-		fmt.Printf("fail to list objects of bucket. %v\n", err)
-	}
+	//TODO ListObjectVersions should be enough for all situations
+	if versioned {
+		input := &s3.ListObjectVersionsInput{
+			Bucket:    aws.String(bucketName),
+			KeyMarker: aws.String(""),
+		}
+		output, err := c.svc.ListObjectVersions(input)
+		if err != nil {
+			fmt.Printf("fail to list object versions of bucket. %v\n", err)
+		}
 
-	for {
-		if len(ListObjectsOutput.Contents) > 0 {
-			c.listedCount += uint64(len(ListObjectsOutput.Contents))
-			fmt.Printf("got %d objects of bucket.\n", c.listedCount)
-			for _, object := range ListObjectsOutput.Contents {
-				objChannel <- *object.Key
+		for {
+			if len(output.Versions) > 0 {
+				c.listedCount += uint64(len(output.Versions))
+				fmt.Printf("got %d objects of bucket.\n", c.listedCount)
+				for _, object := range output.Versions {
+					objChannel <- s3.ObjectIdentifier{
+						Key:       object.Key,
+						VersionId: object.VersionId,
+					}
+				}
+				output, err = c.svc.ListObjectVersions(input)
+				if err != nil {
+					fmt.Printf("fail to list objects of bucket. %v\n", err)
+				}
+				input.KeyMarker = output.NextKeyMarker
+			} else {
+				break
 			}
-			ListObjectsOutput, err = c.svc.ListObjects(listObjectsInput)
-			if err != nil {
-				fmt.Printf("fail to list objects of bucket. %v\n", err)
+		}
+	} else {
+		input := &s3.ListObjectsInput{
+			Bucket: aws.String(bucketName),
+			Marker: aws.String(""),
+		}
+		output, err := c.svc.ListObjects(input)
+		if err != nil {
+			fmt.Printf("fail to list objects of bucket. %v\n", err)
+		}
+
+		for {
+			if len(output.Contents) > 0 {
+				c.listedCount += uint64(len(output.Contents))
+				fmt.Printf("got %d objects of bucket.\n", c.listedCount)
+				for _, object := range output.Contents {
+					objChannel <- s3.ObjectIdentifier{
+						Key: object.Key,
+					}
+				}
+				output, err = c.svc.ListObjects(input)
+				if err != nil {
+					fmt.Printf("fail to list objects of bucket. %v\n", err)
+				}
+				input.Marker = output.NextMarker
+			} else {
+				break
 			}
-			listObjectsInput.Marker = ListObjectsOutput.NextMarker
-		} else {
-			break
 		}
 	}
+
 	close(objChannel)
 }
