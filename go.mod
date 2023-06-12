@@ -1,4 +1,4 @@
-module s3box
+module github.com/regenttsui/s3box
 
 go 1.19
 
