@@ -13,7 +13,7 @@
  * permissions and limitations under the License.
  */
 
-package S3Box
+package s3box
 
 import (
 	"crypto/hmac"

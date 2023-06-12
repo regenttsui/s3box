@@ -1,4 +1,4 @@
-package S3Box
+package s3box
 
 import (
 	"fmt"

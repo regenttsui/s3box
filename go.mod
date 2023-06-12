@@ -1,4 +1,4 @@
-module S3Box
+module s3box
 
 go 1.19
 
