@@ -19,7 +19,6 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -29,11 +28,6 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/request"
-)
-
-var (
-	errInvalidMethod = errors.New("v2 signer only handles HTTP POST")
 )
 
 const (
@@ -42,9 +36,7 @@ const (
 	timeFormat       = "2006-01-02T15:04:05Z"
 )
 
-type signer struct {
-	// Values that must be populated from the request
-	Request     *http.Request
+type Signer struct {
 	Time        time.Time
 	Credentials *credentials.Credentials
 	Debug       aws.LogLevelType
@@ -55,74 +47,36 @@ type signer struct {
 	signature    string
 }
 
-// SignRequestHandler is a named request handler the SDK will use to sign
-// service client request with using the V4 signature.
-var SignRequestHandler = request.NamedHandler{
-	Name: "v2.SignRequestHandler", Fn: SignSDKRequest,
+// NewSigner returns a Signer pointer configured with the aws.Config and time.Time
+func NewSigner(config aws.Config, time time.Time) *Signer {
+	v2 := &Signer{
+
+		Time:        time,
+		Credentials: config.Credentials,
+		Debug:       config.LogLevel.Value(),
+		Logger:      config.Logger,
+	}
+
+	return v2
 }
 
-// SignSDKRequest requests with signature version 2.
-//
-// Will sign the requests with the service config's Credentials object
-// Signing is skipped if the credentials is the credentials.AnonymousCredentials
-// object.
-func SignSDKRequest(req *request.Request) {
-	// If the request does not need to be signed ignore the signing of the
-	// request if the AnonymousCredentials object is used.
-	if req.Config.Credentials == credentials.AnonymousCredentials {
-		return
-	}
-
-	if req.HTTPRequest.Method != "POST" && req.HTTPRequest.Method != "GET" {
-		// The V2 signer only supports GET and POST
-		req.Error = errInvalidMethod
-		return
-	}
-
-	v2 := signer{
-		Request:     req.HTTPRequest,
-		Time:        req.Time,
-		Credentials: req.Config.Credentials,
-		Debug:       req.Config.LogLevel.Value(),
-		Logger:      req.Config.Logger,
-	}
-
-	req.Error = v2.Sign()
-
-	if req.Error != nil {
-		return
-	}
-
-	if req.HTTPRequest.Method == "POST" {
-		// Set the body of the request based on the modified query parameters
-		req.SetStringBody(v2.Query.Encode())
-
-		// Now that the body has changed, remove any Content-Length header,
-		// because it will be incorrect
-		req.HTTPRequest.ContentLength = 0
-		req.HTTPRequest.Header.Del("Content-Length")
-	} else {
-		req.HTTPRequest.URL.RawQuery = v2.Query.Encode()
-	}
-}
-
-func (v2 *signer) Sign() error {
+func (v2 *Signer) Sign(r *http.Request) error {
 	credValue, err := v2.Credentials.Get()
 	if err != nil {
 		return err
 	}
 
-	if v2.Request.Method == "POST" {
+	if r.Method == "POST" {
 		// Parse the HTTP request to obtain the query parameters that will
 		// be used to build the string to sign. Note that because the HTTP
 		// request will need to be modified, the PostForm and Form properties
 		// are reset to nil after parsing.
-		v2.Request.ParseForm()
-		v2.Query = v2.Request.PostForm
-		v2.Request.PostForm = nil
-		v2.Request.Form = nil
+		r.ParseForm()
+		v2.Query = r.PostForm
+		r.PostForm = nil
+		r.Form = nil
 	} else {
-		v2.Query = v2.Request.URL.Query()
+		v2.Query = r.URL.Query()
 	}
 
 	// Set new query parameters
@@ -137,14 +91,14 @@ func (v2 *signer) Sign() error {
 	// in case this is a retry, ensure no signature present
 	v2.Query.Del("Signature")
 
-	method := v2.Request.Method
-	host := v2.Request.URL.Host
-	path := v2.Request.URL.Path
+	method := r.Method
+	host := r.URL.Host
+	path := r.URL.Path
 	if path == "" {
 		path = "/"
 	}
 
-	// obtain all of the query keys and sort them
+	// obtain all the query keys and sort them
 	queryKeys := make([]string, 0, len(v2.Query))
 	for key := range v2.Query {
 		queryKeys = append(queryKeys, key)
@@ -174,6 +128,7 @@ func (v2 *signer) Sign() error {
 	hash.Write([]byte(v2.stringToSign))
 	v2.signature = base64.StdEncoding.EncodeToString(hash.Sum(nil))
 	v2.Query.Set("Signature", v2.signature)
+	r.URL.RawQuery = v2.Query.Encode()
 
 	if v2.Debug.Matches(aws.LogDebugWithSigning) {
 		v2.logSigningInfo()
@@ -189,7 +144,7 @@ const logSignInfoMsg = `DEBUG: Request Signature:
 %s
 -----------------------------------------------------`
 
-func (v2 *signer) logSigningInfo() {
+func (v2 *Signer) logSigningInfo() {
 	msg := fmt.Sprintf(logSignInfoMsg, v2.stringToSign, v2.Query.Get("Signature"))
 	v2.Logger.Log(msg)
 }
