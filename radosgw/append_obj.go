@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func (rgw *RgwClient) AppendObjV2(bucketName, objKey, position uint64, body io.ReadSeeker) (*http.Response, error) {
+func (rgw *RgwClient) AppendObjV2(bucketName, objKey string, position uint64, body io.ReadSeeker) (*http.Response, error) {
 	endpoint := strings.TrimRight(rgw.svc.Endpoint, "/")
 	url := fmt.Sprintf("%s/%s/%s?append&position=%d", endpoint, bucketName, objKey, position)
 	req, err := http.NewRequest("PUT", url, body)
@@ -34,9 +34,13 @@ func (rgw *RgwClient) AppendObjV4(bucketName, objKey string, position uint64, bo
 
 	endpoint := strings.TrimRight(rgw.svc.Endpoint, "/")
 	url := fmt.Sprintf("%s/%s/%s?append&position=%d", endpoint, bucketName, objKey, position)
-	req, err := http.NewRequest("PUT", url, nil)
+	req, err := http.NewRequest("PUT", url, body)
 	if err != nil {
 		return nil, err
+	}
+
+	if bodyLen > 0 {
+		req.Header.Set("Content-Length", strconv.Itoa(bodyLen))
 	}
 
 	_, err = signer.Sign(req, body, "s3", "region", time.Now())
