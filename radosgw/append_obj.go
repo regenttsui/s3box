@@ -39,10 +39,6 @@ func (rgw *RgwClient) AppendObjV4(bucketName, objKey string, position uint64, bo
 		return nil, err
 	}
 
-	if bodyLen > 0 {
-		req.Header.Set("Content-Length", strconv.Itoa(bodyLen))
-	}
-
 	_, err = signer.Sign(req, body, "s3", "region", time.Now())
 	if err != nil {
 		return nil, err
