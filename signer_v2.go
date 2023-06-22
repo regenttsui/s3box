@@ -50,7 +50,6 @@ type Signer struct {
 // NewSigner returns a Signer pointer configured with the aws.Config and time.Time
 func NewSigner(config aws.Config, time time.Time) *Signer {
 	v2 := &Signer{
-
 		Time:        time,
 		Credentials: config.Credentials,
 		Debug:       config.LogLevel.Value(),
