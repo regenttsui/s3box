@@ -17,11 +17,14 @@ package s3box
 
 import (
 	"crypto/hmac"
-	"crypto/sha256"
+	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/regenttsui/s3box/utils"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -31,10 +34,16 @@ import (
 )
 
 const (
-	signatureVersion = "2"
-	signatureMethod  = "HmacSHA256"
-	timeFormat       = "2006-01-02T15:04:05Z"
+	timeFormat      = "2006-01-02T15:04:05Z"
+	amzHeaderPrefix = "x-amz"
 )
+
+const logSignInfoMsg = `DEBUG: Request Signature:
+---[ STRING TO SIGN ]--------------------------------
+%s
+---[ SIGNATURE ]-------------------------------------
+%s
+-----------------------------------------------------`
 
 type Signer struct {
 	Time        time.Time
@@ -65,69 +74,23 @@ func (v2 *Signer) Sign(r *http.Request) error {
 		return err
 	}
 
-	if r.Method == "POST" {
-		// Parse the HTTP request to obtain the query parameters that will
-		// be used to build the string to sign. Note that because the HTTP
-		// request will need to be modified, the PostForm and Form properties
-		// are reset to nil after parsing.
-		r.ParseForm()
-		v2.Query = r.PostForm
-		r.PostForm = nil
-		r.Form = nil
-	} else {
-		v2.Query = r.URL.Query()
-	}
-
-	// Set new query parameters
-	v2.Query.Set("AWSAccessKeyId", credValue.AccessKeyID)
-	v2.Query.Set("SignatureVersion", signatureVersion)
-	v2.Query.Set("SignatureMethod", signatureMethod)
-	v2.Query.Set("Timestamp", v2.Time.UTC().Format(timeFormat))
+	r.Header.Set("Date", v2.Time.UTC().Format(timeFormat))
 	if credValue.SessionToken != "" {
-		v2.Query.Set("SecurityToken", credValue.SessionToken)
+		r.Header.Set("X-Amz-Security-Token", credValue.SessionToken)
 	}
 
-	// in case this is a retry, ensure no signature present
-	v2.Query.Del("Signature")
-
-	method := r.Method
-	host := r.URL.Host
-	path := r.URL.Path
-	if path == "" {
-		path = "/"
+	request.SanitizeHostForHeader(r)
+	if r.URL.Path == "" {
+		r.URL.Path += "/"
 	}
 
-	// obtain all the query keys and sort them
-	queryKeys := make([]string, 0, len(v2.Query))
-	for key := range v2.Query {
-		queryKeys = append(queryKeys, key)
-	}
-	sort.Strings(queryKeys)
+	v2.stringToSign = v2.buildStringToSign(r)
 
-	// build URL-encoded query keys and values
-	queryKeysAndValues := make([]string, len(queryKeys))
-	for i, key := range queryKeys {
-		k := strings.Replace(url.QueryEscape(key), "+", "%20", -1)
-		v := strings.Replace(url.QueryEscape(v2.Query.Get(key)), "+", "%20", -1)
-		queryKeysAndValues[i] = k + "=" + v
-	}
-
-	// join into one query string
-	query := strings.Join(queryKeysAndValues, "&")
-
-	// build the canonical string for the V2 signature
-	v2.stringToSign = strings.Join([]string{
-		method,
-		host,
-		path,
-		query,
-	}, "\n")
-
-	hash := hmac.New(sha256.New, []byte(credValue.SecretAccessKey))
+	hash := hmac.New(sha1.New, []byte(credValue.SecretAccessKey))
 	hash.Write([]byte(v2.stringToSign))
 	v2.signature = base64.StdEncoding.EncodeToString(hash.Sum(nil))
-	v2.Query.Set("Signature", v2.signature)
-	r.URL.RawQuery = v2.Query.Encode()
+	authHeader := fmt.Sprintf("AWS %s:%s", credValue.AccessKeyID, v2.signature)
+	r.Header.Set("Authorization", authHeader)
 
 	if v2.Debug.Matches(aws.LogDebugWithSigning) {
 		v2.logSigningInfo()
@@ -136,14 +99,118 @@ func (v2 *Signer) Sign(r *http.Request) error {
 	return nil
 }
 
-const logSignInfoMsg = `DEBUG: Request Signature:
----[ STRING TO SIGN ]--------------------------------
-%s
----[ SIGNATURE ]-------------------------------------
-%s
------------------------------------------------------`
+func (v2 *Signer) buildStringToSign(r *http.Request) string {
+	str := strings.Join([]string{
+		r.Method,
+		r.Header.Get("Content-MD5"),
+		r.Header.Get("Content-Type"),
+		r.Header.Get("Date"),
+	}, "\n")
+	if canonicalHeaders := v2.canonicalizedAmzHeaders(r); canonicalHeaders != "" {
+		str += canonicalHeaders
+	}
+	str += v2.canonicalizedResource(r)
+
+	return str
+}
+
+func (v2 *Signer) canonicalizedAmzHeaders(r *http.Request) string {
+	var headers []string
+	signedHeaderVals := make(http.Header)
+	headers = append(headers, "host")
+	for k, v := range r.Header {
+		lowerCaseKey := strings.ToLower(k)
+		if !strings.HasPrefix(lowerCaseKey, amzHeaderPrefix) {
+			continue // ignored header
+		}
+
+		if _, ok := signedHeaderVals[lowerCaseKey]; ok {
+			// include additional values
+			signedHeaderVals[lowerCaseKey] = append(signedHeaderVals[lowerCaseKey], v...)
+			continue
+		}
+
+		headers = append(headers, lowerCaseKey)
+		signedHeaderVals[lowerCaseKey] = v
+	}
+	sort.Strings(headers)
+
+	headerItems := make([]string, len(headers))
+	for i, k := range headers {
+		if k == "host" {
+			if r.Host != "" {
+				headerItems[i] = "host:" + r.Host
+			} else {
+				headerItems[i] = "host:" + r.URL.Host
+			}
+		} else {
+			headerValues := make([]string, len(signedHeaderVals[k]))
+			for j, v := range signedHeaderVals[k] {
+				headerValues[j] = strings.TrimSpace(v)
+			}
+			headerItems[i] = k + ":" +
+				strings.Join(headerValues, ",")
+		}
+	}
+	utils.StripExcessSpaces(headerItems)
+	if len(headerItems) > 0 {
+		return strings.Join(headerItems, "\n")
+	}
+	return ""
+}
+
+func (v2 *Signer) canonicalizedResource(r *http.Request) string {
+	resource := ""
+
+	if strings.Count(r.Host, ".") == 4 {
+		bucketName := strings.Split(r.Host, ".")[0]
+		resource += "/" + bucketName
+	}
+
+	resource += r.URL.EscapedPath()
+
+	sortedS3Subresources := []string{
+		"acl", "cors", "delete", "lifecycle", "location",
+		"logging", "notification", "partNumber",
+		"policy", "requestPayment",
+		"response-cache-control",
+		"response-content-disposition",
+		"response-content-encoding",
+		"response-content-language",
+		"response-content-type",
+		"response-expires",
+		"torrent", "uploadId", "uploads", "versionId",
+		"versioning", "versions", "website",
+	}
+	requestQuery := r.URL.Query()
+	encodedQuery := ""
+	for _, q := range sortedS3Subresources {
+		if values, ok := requestQuery[q]; ok {
+			for _, v := range values {
+				if encodedQuery != "" {
+					encodedQuery += "&"
+				}
+				if v == "" {
+					encodedQuery += q
+				} else {
+					encodedQuery += q + "=" + v
+				}
+			}
+		}
+	}
+	if encodedQuery != "" {
+		resource += "?" + encodedQuery
+	}
+
+	return resource
+}
+
+func (v2 *Signer) containsChinese(str string) bool {
+	result, _ := regexp.MatchString(`[\x{4e00}-\x{9fa5}]+`, str)
+	return result
+}
 
 func (v2 *Signer) logSigningInfo() {
-	msg := fmt.Sprintf(logSignInfoMsg, v2.stringToSign, v2.Query.Get("Signature"))
+	msg := fmt.Sprintf(logSignInfoMsg, v2.stringToSign, v2.signature)
 	v2.Logger.Log(msg)
 }
