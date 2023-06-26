@@ -15,14 +15,12 @@ import (
 type BucketCleaner struct {
 	svc          *s3.S3
 	deletedCount uint64
-	listedCount  uint64
 }
 
 func NewBucketCleaner(svc *s3.S3) *BucketCleaner {
 	c := &BucketCleaner{
 		svc:          svc,
 		deletedCount: 0,
-		listedCount:  0,
 	}
 	return c
 }
@@ -30,7 +28,6 @@ func NewBucketCleaner(svc *s3.S3) *BucketCleaner {
 // EmptyBucket is to empty objects in the bucket concurrently.
 // objChanCap is the capacity of channel to store the objects from listObjs
 // multiDelNum decides whether to delete multiple objects in a request
-// TODO 增加清理分片
 func (c *BucketCleaner) EmptyBucket(bucketName string, deleteWorkerNum, objChanCap, multiDelNum int, deleteBucket bool) error {
 	var wg sync.WaitGroup
 	wg.Add(deleteWorkerNum + 2)
@@ -73,41 +70,47 @@ func (c *BucketCleaner) EmptyBucket(bucketName string, deleteWorkerNum, objChanC
 		if err != nil {
 			return err
 		}
+		fmt.Printf("deleted bucket:%s\n", bucketName)
 	}
 	return nil
 }
 
 // DeleteAllBuckets delete all buckets or all buckets contain a specified string of a user
 func (c *BucketCleaner) DeleteAllBuckets(containedStr string) error {
+	var wg sync.WaitGroup
 	listBucketsInput := &s3.ListBucketsInput{}
 	listBucketsOutput, err := c.svc.ListBuckets(listBucketsInput)
 	if err != nil {
 		return err
 	}
+
 	for _, b := range listBucketsOutput.Buckets {
-		if containedStr != "" {
-			if strings.Contains(*b.Name, containedStr) {
-				go c.EmptyBucket(*b.Name, 3, 1000, 1000, true)
-			}
-		} else {
-			go c.EmptyBucket(*b.Name, 3, 1000, 1000, true)
+		bktName := *b.Name
+		if containedStr == "" || strings.Contains(bktName, containedStr) {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				c.EmptyBucket(bktName, 3, 1000, 0, true)
+			}()
 		}
 	}
+	wg.Wait()
 	return nil
 }
 
 // 定时打印任务+每秒更新状态
 func (c *BucketCleaner) crontabPrintResults(startTime time.Time) {
 	timeTicker := time.NewTicker(time.Duration(1) * time.Second)
+	defer timeTicker.Stop()
 	tps := 0.0
 	for {
 		<-timeTicker.C
 		timeDiff := time.Since(startTime)
 		tps = float64(c.deletedCount) / timeDiff.Seconds()
 		fmt.Printf("TPS:%f\n", tps)
-		//if {
-		//	timeTicker.Stop()
-		//}
+		if c.deletedCount > 0 && c.deletedCount%10000 == 0 {
+			fmt.Printf("deleted %d objects\n", c.deletedCount)
+		}
 	}
 }
 
@@ -119,6 +122,7 @@ func (c *BucketCleaner) deleteObjs(objChannel chan s3.ObjectIdentifier, bucketNa
 			VersionId: obj.VersionId,
 		}
 		objs = append(objs, &objId)
+		//FIXME 如果桶内对象数不足multiDelNum，会导致永远阻塞在此处
 		if len(objs) < multiDelNum {
 			continue
 		}
@@ -134,15 +138,10 @@ func (c *BucketCleaner) deleteObjs(objChannel chan s3.ObjectIdentifier, bucketNa
 		if err != nil {
 			fmt.Printf("Failed to delete objects. %v\n", err)
 		} else {
-			fmt.Printf("deleted %d objects\n", len(objs))
 			atomic.AddUint64(&c.deletedCount, 1)
 		}
 
 		objs = objs[0:0]
-
-		if c.deletedCount%10000 == 0 {
-			fmt.Printf("Deleted %d objects\n", c.deletedCount)
-		}
 	}
 }
 
@@ -158,12 +157,7 @@ func (c *BucketCleaner) deleteObj(objChannel chan s3.ObjectIdentifier, bucketNam
 		if err != nil {
 			fmt.Printf("Failed to delete object. %v\n", err)
 		} else {
-			//fmt.Printf("deleted object: %v\n", obj)
 			atomic.AddUint64(&c.deletedCount, 1)
-		}
-
-		if c.deletedCount%10000 == 0 {
-			fmt.Printf("Deleted %d objects\n", c.deletedCount)
 		}
 	}
 }
@@ -182,10 +176,11 @@ func (c *BucketCleaner) abortAllMultiparts(bucketName string) {
 		return
 	}
 
+	listedCount := 0
 	for {
 		if len(allUploads.Uploads) > 0 {
-			c.listedCount += uint64(len(allUploads.Uploads))
-			fmt.Printf("got %d objects of bucket.\n", c.listedCount)
+			listedCount += len(allUploads.Uploads)
+			fmt.Printf("got %d objects of bucket %v\n", listedCount, bucketName)
 			for _, upload := range allUploads.Uploads {
 				abortInput := &s3.AbortMultipartUploadInput{
 					Bucket:   &bucketName,
@@ -212,18 +207,19 @@ func (c *BucketCleaner) abortAllMultiparts(bucketName string) {
 func (c *BucketCleaner) listObjs(objChannel chan s3.ObjectIdentifier, bucketName string) {
 	fmt.Printf("listing buckets %v\n", bucketName)
 	input := &s3.ListObjectVersionsInput{
-		Bucket:    aws.String(bucketName),
-		KeyMarker: aws.String(""),
+		Bucket: aws.String(bucketName),
+		//KeyMarker: aws.String(""),
 	}
 	output, err := c.svc.ListObjectVersions(input)
 	if err != nil {
 		fmt.Printf("fail to list object versions of bucket. %v\n", err)
 	}
 
+	listedCount := 0
 	for {
 		if len(output.Versions) > 0 {
-			c.listedCount += uint64(len(output.Versions))
-			fmt.Printf("got %d objects of bucket.\n", c.listedCount)
+			listedCount += len(output.Versions)
+			fmt.Printf("got %d objects of bucket %v\n", listedCount, bucketName)
 			for _, object := range output.Versions {
 				objChannel <- s3.ObjectIdentifier{
 					Key:       object.Key,
