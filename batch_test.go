@@ -30,7 +30,18 @@ func BuildClient() *s3.S3 {
 	return svc
 }
 
-func TestDeleteAllBuckets(t *testing.T) {
+func TestBucketCleaner_DeleteAllBuckets(t *testing.T) {
 	bc := NewBucketCleaner(svc)
-	bc.DeleteAllBuckets("abc")
+	err := bc.DeleteAllBuckets("abc")
+	if err != nil {
+		return
+	}
+}
+
+func TestBucketCleaner_EmptyBucket(t *testing.T) {
+	bc := NewBucketCleaner(svc)
+	err := bc.EmptyBucket("abc", 5, 1000, 0, false)
+	if err != nil {
+		return
+	}
 }

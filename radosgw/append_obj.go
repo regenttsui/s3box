@@ -12,7 +12,7 @@ import (
 )
 
 func (rgw *RgwClient) AppendObjV2(bucketName, objKey string, position uint64, body io.ReadSeeker) (*http.Response, error) {
-	endpoint := strings.TrimRight(rgw.svc.Endpoint, "/")
+	endpoint := strings.TrimRight(*rgw.config.Endpoint, "/")
 	url := fmt.Sprintf("%s/%s/%s?append&position=%d", endpoint, bucketName, objKey, position)
 	req, err := http.NewRequest("PUT", url, body)
 	if err != nil {
@@ -24,7 +24,7 @@ func (rgw *RgwClient) AppendObjV2(bucketName, objKey string, position uint64, bo
 		return nil, err
 	}
 
-	signer := s3box.NewSigner(rgw.svc.Config, time.Now())
+	signer := s3box.NewSigner(*rgw.config, time.Now())
 	err = signer.Sign(req)
 	if err != nil {
 		return nil, err
@@ -36,7 +36,7 @@ func (rgw *RgwClient) AppendObjV2(bucketName, objKey string, position uint64, bo
 }
 
 func (rgw *RgwClient) AppendObjV4(bucketName, objKey string, position uint64, body io.ReadSeeker) (*http.Response, error) {
-	endpoint := strings.TrimRight(rgw.svc.Endpoint, "/")
+	endpoint := strings.TrimRight(*rgw.config.Endpoint, "/")
 	url := fmt.Sprintf("%s/%s/%s?append&position=%d", endpoint, bucketName, objKey, position)
 	req, err := http.NewRequest("PUT", url, body)
 	if err != nil {
@@ -48,7 +48,7 @@ func (rgw *RgwClient) AppendObjV4(bucketName, objKey string, position uint64, bo
 		return nil, err
 	}
 
-	signer := v4.NewSigner(rgw.svc.Config.Credentials)
+	signer := v4.NewSigner(rgw.config.Credentials)
 	_, err = signer.Sign(req, body, "s3", "region", time.Now())
 	if err != nil {
 		return nil, err

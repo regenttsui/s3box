@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
 	"testing"
 )
 
@@ -26,9 +24,7 @@ func BuildClient() *RgwClient {
 		Credentials:      credentials.NewStaticCredentials("ak", "sk", ""),
 		LogLevel:         aws.LogLevel(aws.LogDebug),
 	}
-	sess := session.Must(session.NewSessionWithOptions(session.Options{Config: *conf}))
-	svc := s3.New(sess)
-	rgwClient := NewRgwClient(svc)
+	rgwClient := NewRgwClient(conf)
 	return rgwClient
 }
 
