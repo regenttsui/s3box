@@ -40,7 +40,7 @@ func TestBucketCleaner_DeleteAllBuckets(t *testing.T) {
 
 func TestBucketCleaner_EmptyBucket(t *testing.T) {
 	bc := NewBucketCleaner(svc)
-	err := bc.EmptyBucket("abc", 5, 1000, 0, false)
+	err := bc.EmptyBucket("abc", 5, 1000, true, false)
 	if err != nil {
 		return
 	}

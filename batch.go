@@ -27,8 +27,8 @@ func NewBucketCleaner(svc *s3.S3) *BucketCleaner {
 
 // EmptyBucket is to empty objects in the bucket concurrently.
 // objChanCap is the capacity of channel to store the objects from listObjs
-// multiDelNum decides whether to delete multiple objects in a request
-func (c *BucketCleaner) EmptyBucket(bucketName string, deleteWorkerNum, objChanCap, multiDelNum int, deleteBucket bool) error {
+// multiDel decides whether to delete multiple objects in a request
+func (c *BucketCleaner) EmptyBucket(bucketName string, deleteWorkerNum, objChanCap int, multiDel, deleteBucket bool) error {
 	var wg sync.WaitGroup
 	wg.Add(deleteWorkerNum + 2)
 	startTime := time.Now()
@@ -47,10 +47,10 @@ func (c *BucketCleaner) EmptyBucket(bucketName string, deleteWorkerNum, objChanC
 
 	// 并发删除对象
 	for i := 0; i < deleteWorkerNum; i++ {
-		if multiDelNum > 0 {
+		if multiDel {
 			go func() {
 				defer wg.Done()
-				c.deleteObjs(objChannel, bucketName, multiDelNum)
+				c.deleteObjs(objChannel, bucketName)
 			}()
 		} else {
 			go func() {
@@ -61,6 +61,7 @@ func (c *BucketCleaner) EmptyBucket(bucketName string, deleteWorkerNum, objChanC
 	}
 
 	wg.Wait()
+	fmt.Println("all task completed")
 
 	if deleteBucket {
 		deleteBucketInput := &s3.DeleteBucketInput{
@@ -68,6 +69,7 @@ func (c *BucketCleaner) EmptyBucket(bucketName string, deleteWorkerNum, objChanC
 		}
 		_, err := c.svc.DeleteBucket(deleteBucketInput)
 		if err != nil {
+			fmt.Printf("delete bucket err:%s\n", err)
 			return err
 		}
 		fmt.Printf("deleted bucket:%s\n", bucketName)
@@ -77,7 +79,6 @@ func (c *BucketCleaner) EmptyBucket(bucketName string, deleteWorkerNum, objChanC
 
 // DeleteAllBuckets delete all buckets or all buckets contain a specified string of a user
 func (c *BucketCleaner) DeleteAllBuckets(containedStr string) error {
-	var wg sync.WaitGroup
 	listBucketsInput := &s3.ListBucketsInput{}
 	listBucketsOutput, err := c.svc.ListBuckets(listBucketsInput)
 	if err != nil {
@@ -87,14 +88,9 @@ func (c *BucketCleaner) DeleteAllBuckets(containedStr string) error {
 	for _, b := range listBucketsOutput.Buckets {
 		bktName := *b.Name
 		if containedStr == "" || strings.Contains(bktName, containedStr) {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				c.EmptyBucket(bktName, 3, 1000, 0, true)
-			}()
+			c.EmptyBucket(bktName, 3, 1000, true, true)
 		}
 	}
-	wg.Wait()
 	return nil
 }
 
@@ -114,50 +110,77 @@ func (c *BucketCleaner) crontabPrintResults(startTime time.Time) {
 	}
 }
 
-func (c *BucketCleaner) deleteObjs(objChannel chan s3.ObjectIdentifier, bucketName string, multiDelNum int) {
-	objs := make([]*s3.ObjectIdentifier, 0, multiDelNum)
-	for obj := range objChannel {
-		objId := s3.ObjectIdentifier{
-			Key:       obj.Key,
-			VersionId: obj.VersionId,
-		}
-		objs = append(objs, &objId)
-		//FIXME 如果桶内对象数不足multiDelNum，会导致永远阻塞在此处
-		if len(objs) < multiDelNum {
-			continue
-		}
-		deleteObjectsInput := &s3.DeleteObjectsInput{
-			Bucket: aws.String(bucketName),
-			Delete: &s3.Delete{
-				Objects: objs,
-				Quiet:   aws.Bool(true),
-			},
-		}
+func (c *BucketCleaner) deleteObjs(objChannel chan s3.ObjectIdentifier, bucketName string) {
+	maxDelNum := 1000
+	objs := make([]*s3.ObjectIdentifier, 0, maxDelNum)
+	for {
+		select {
+		case obj, ok := <-objChannel:
+			if !ok {
+				//如果还有没删除的对象，先删除再退出
+				if len(objs) > 0 {
+					c.doDeleteObjsReq(objs, bucketName)
+				}
+				return
+			}
+			objId := s3.ObjectIdentifier{
+				Key:       obj.Key,
+				VersionId: obj.VersionId,
+			}
+			objs = append(objs, &objId)
+			if len(objs) < maxDelNum {
+				continue
+			}
 
-		_, err := c.svc.DeleteObjects(deleteObjectsInput)
-		if err != nil {
-			fmt.Printf("Failed to delete objects. %v\n", err)
-		} else {
-			atomic.AddUint64(&c.deletedCount, 1)
-		}
+			c.doDeleteObjsReq(objs, bucketName)
+			objs = objs[0:0]
 
-		objs = objs[0:0]
+		default:
+			// 通道中没有数据可读时，直接执行删除操作，再继续下一次循环
+			if len(objs) > 0 {
+				c.doDeleteObjsReq(objs, bucketName)
+				objs = objs[0:0]
+			}
+		}
+	}
+}
+
+func (c *BucketCleaner) doDeleteObjsReq(objs []*s3.ObjectIdentifier, bucketName string) {
+	deleteObjectsInput := &s3.DeleteObjectsInput{
+		Bucket: aws.String(bucketName),
+		Delete: &s3.Delete{
+			Objects: objs,
+			Quiet:   aws.Bool(true),
+		},
+	}
+
+	_, err := c.svc.DeleteObjects(deleteObjectsInput)
+	if err != nil {
+		fmt.Printf("Failed to delete objects. %v\n", err)
+	} else {
+		atomic.AddUint64(&c.deletedCount, 1)
 	}
 }
 
 func (c *BucketCleaner) deleteObj(objChannel chan s3.ObjectIdentifier, bucketName string) {
-	for obj := range objChannel {
-		deleteObjectInput := &s3.DeleteObjectInput{
-			Bucket:    aws.String(bucketName),
-			Key:       obj.Key,
-			VersionId: obj.VersionId,
-		}
+	for {
+		select {
+		case obj, ok := <-objChannel:
+			if !ok {
+				return
+			}
+			deleteObjectInput := &s3.DeleteObjectInput{
+				Bucket:    aws.String(bucketName),
+				Key:       obj.Key,
+				VersionId: obj.VersionId,
+			}
 
-		_, err := c.svc.DeleteObject(deleteObjectInput)
-		if err != nil {
-			fmt.Printf("Failed to delete object. %v\n", err)
-		} else {
-			atomic.AddUint64(&c.deletedCount, 1)
+			_, err := c.svc.DeleteObject(deleteObjectInput)
+			if err != nil {
+				fmt.Printf("Failed to delete object. %v\n", err)
+			} else {
+				atomic.AddUint64(&c.deletedCount, 1)
+			}
 		}
 	}
 }
@@ -206,6 +229,7 @@ func (c *BucketCleaner) abortAllMultiparts(bucketName string) {
 
 func (c *BucketCleaner) listObjs(objChannel chan s3.ObjectIdentifier, bucketName string) {
 	fmt.Printf("listing buckets %v\n", bucketName)
+	defer close(objChannel)
 	input := &s3.ListObjectVersionsInput{
 		Bucket: aws.String(bucketName),
 		//KeyMarker: aws.String(""),
@@ -213,6 +237,7 @@ func (c *BucketCleaner) listObjs(objChannel chan s3.ObjectIdentifier, bucketName
 	output, err := c.svc.ListObjectVersions(input)
 	if err != nil {
 		fmt.Printf("fail to list object versions of bucket. %v\n", err)
+		return
 	}
 
 	listedCount := 0
@@ -236,6 +261,4 @@ func (c *BucketCleaner) listObjs(objChannel chan s3.ObjectIdentifier, bucketName
 			break
 		}
 	}
-
-	close(objChannel)
 }
