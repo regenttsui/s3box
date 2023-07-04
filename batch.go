@@ -257,6 +257,21 @@ func (c *BucketCleaner) listObjs(objChannel chan s3.ObjectIdentifier, bucketName
 			if err != nil {
 				fmt.Printf("fail to list objects of bucket. %v\n", err)
 			}
+		} else if len(output.DeleteMarkers) > 0 {
+			listedCount += len(output.DeleteMarkers)
+			fmt.Printf("got %d objects of bucket %v\n", listedCount, bucketName)
+			for _, object := range output.DeleteMarkers {
+				objChannel <- s3.ObjectIdentifier{
+					Key:       object.Key,
+					VersionId: object.VersionId,
+				}
+			}
+
+			input.KeyMarker = output.NextKeyMarker
+			output, err = c.svc.ListObjectVersions(input)
+			if err != nil {
+				fmt.Printf("fail to list objects of bucket. %v\n", err)
+			}
 		} else {
 			break
 		}
