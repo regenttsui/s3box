@@ -3,17 +3,14 @@ package radosgw
 import (
 	"fmt"
 	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
-	"github.com/regenttsui/s3box"
 	"github.com/regenttsui/s3box/utils"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 )
 
 func (rgw *RgwClient) AppendObjV2(bucketName, objKey string, position uint64, body io.ReadSeeker) (*http.Response, error) {
-	endpoint := strings.TrimRight(*rgw.config.Endpoint, "/")
-	url := fmt.Sprintf("%s/%s/%s?append&position=%d", endpoint, bucketName, objKey, position)
+	url := fmt.Sprintf("%s/%s/%s?append&position=%d", *rgw.config.Endpoint, bucketName, objKey, position)
 	req, err := http.NewRequest("PUT", url, body)
 	if err != nil {
 		return nil, err
@@ -24,20 +21,13 @@ func (rgw *RgwClient) AppendObjV2(bucketName, objKey string, position uint64, bo
 		return nil, err
 	}
 
-	signer := s3box.NewSigner(*rgw.config, time.Now())
-	err = signer.Sign(req)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := rgw.buildSignerV2AndSendReq(req)
 
 	return resp, err
 }
 
 func (rgw *RgwClient) AppendObjV4(bucketName, objKey string, position uint64, body io.ReadSeeker) (*http.Response, error) {
-	endpoint := strings.TrimRight(*rgw.config.Endpoint, "/")
-	url := fmt.Sprintf("%s/%s/%s?append&position=%d", endpoint, bucketName, objKey, position)
+	url := fmt.Sprintf("%s/%s/%s?append&position=%d", *rgw.config.Endpoint, bucketName, objKey, position)
 	req, err := http.NewRequest("PUT", url, body)
 	if err != nil {
 		return nil, err
