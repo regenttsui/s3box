@@ -58,6 +58,7 @@ func (rgw *RgwClient) PutBucketQuota(uid, bucketName string, body *strings.Reade
 	return resp, err
 }
 
+// GetUserQuota TODO define a struct to hold response for easier use by the client
 func (rgw *RgwClient) GetUserQuota(uid string) (*http.Response, error) {
 	url := fmt.Sprintf("%s/admin/user?quota&uid=%s&quota-type=user", *rgw.config.Endpoint, uid)
 	req, err := http.NewRequest("GET", url, nil)

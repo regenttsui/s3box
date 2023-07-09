@@ -94,7 +94,6 @@ func (c *BucketCleaner) DeleteAllBuckets(containedStr string) error {
 	return nil
 }
 
-// 定时打印任务+每秒更新状态
 func (c *BucketCleaner) crontabPrintResults(startTime time.Time) {
 	timeTicker := time.NewTicker(time.Duration(1) * time.Second)
 	defer timeTicker.Stop()
@@ -117,7 +116,7 @@ func (c *BucketCleaner) deleteObjs(objChannel chan s3.ObjectIdentifier, bucketNa
 		select {
 		case obj, ok := <-objChannel:
 			if !ok {
-				//如果还有没删除的对象，先删除再退出
+				// If there are any undeleted objects, delete them first and then exit
 				if len(objs) > 0 {
 					c.doDeleteObjsReq(objs, bucketName)
 				}
@@ -136,7 +135,7 @@ func (c *BucketCleaner) deleteObjs(objChannel chan s3.ObjectIdentifier, bucketNa
 			objs = objs[0:0]
 
 		default:
-			// 通道中没有数据可读时，直接执行删除操作，再继续下一次循环
+			// If no data is available in the channel, delete the objects directly and continue the next loop
 			if len(objs) > 0 {
 				c.doDeleteObjsReq(objs, bucketName)
 				objs = objs[0:0]
