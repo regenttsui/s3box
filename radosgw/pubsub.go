@@ -73,7 +73,7 @@ func (rgw *RgwClient) CreateNotification(topicArn, bucket, notificationId, prefi
 	}
 
 	url := fmt.Sprintf("%s/%s?notification", *rgw.config.Endpoint, bucket)
-	req, err := http.NewRequest("POST", url, strings.NewReader(body))
+	req, err := http.NewRequest("PUT", url, strings.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func (rgw *RgwClient) GetNotification(bucket, notificationId string) (*http.Resp
 	if notificationId != "" {
 		url += "=" + notificationId
 	}
-	req, err := http.NewRequest("POST", url, nil)
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
