@@ -1,14 +1,27 @@
 package radosgw
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
-	"strings"
 	"testing"
 )
 
 func TestRgwClient_PutUserQuota(t *testing.T) {
-	body := strings.NewReader("{\"enabled\":false,\"check_on_raw\":false,\"max_size\":-1,\"max_size_kb\":0,\"max_objects\":-1}")
-	response, err := rgw.PutUserQuota("test_quota", body)
+	quota := Quota{
+		Enabled:    false,
+		CheckOnRaw: false,
+		MaxSize:    -1,
+		MaxSizeKB:  0,
+		MaxObjects: -1,
+	}
+	var buf bytes.Buffer
+	err := json.NewEncoder(&buf).Encode(quota)
+	if err != nil {
+		return
+	}
+
+	response, err := rgw.PutUserQuota("quota-user", bytes.NewReader(buf.Bytes()))
 	if err != nil {
 		return
 	}
@@ -16,8 +29,19 @@ func TestRgwClient_PutUserQuota(t *testing.T) {
 }
 
 func TestRgwClient_PutUserBucketQuota(t *testing.T) {
-	body := strings.NewReader("{\"enabled\":true,\"check_on_raw\":false,\"max_size_kb\":100,\"max_objects\":100}")
-	response, err := rgw.PutUserBucketQuota("test_quota", body)
+	quota := Quota{
+		Enabled:    true,
+		CheckOnRaw: false,
+		MaxSizeKB:  100,
+		MaxObjects: 100,
+	}
+	var buf bytes.Buffer
+	err := json.NewEncoder(&buf).Encode(quota)
+	if err != nil {
+		return
+	}
+
+	response, err := rgw.PutUserBucketQuota("quota-user", bytes.NewReader(buf.Bytes()))
 	if err != nil {
 		return
 	}
@@ -25,8 +49,19 @@ func TestRgwClient_PutUserBucketQuota(t *testing.T) {
 }
 
 func TestRgwClient_PutBucketQuota(t *testing.T) {
-	body := strings.NewReader("{\"enabled\":false,\"check_on_raw\":false,\"max_size_kb\":200,\"max_objects\":100}")
-	response, err := rgw.PutBucketQuota("test_quota", "test-bkt", body)
+	quota := Quota{
+		Enabled:    false,
+		CheckOnRaw: false,
+		MaxSizeKB:  200,
+		MaxObjects: 100,
+	}
+	var buf bytes.Buffer
+	err := json.NewEncoder(&buf).Encode(quota)
+	if err != nil {
+		return
+	}
+
+	response, err := rgw.PutBucketQuota("quota-user", "test-bkt", bytes.NewReader(buf.Bytes()))
 	if err != nil {
 		return
 	}
@@ -34,25 +69,25 @@ func TestRgwClient_PutBucketQuota(t *testing.T) {
 }
 
 func TestRgwClient_GetUserQuota(t *testing.T) {
-	response, err := rgw.GetUserQuota("test_quota")
+	quota, err := rgw.GetUserQuota("quota-user")
 	if err != nil {
 		return
 	}
-	fmt.Println(response)
+	fmt.Println(quota)
 }
 
 func TestRgwClient_GetUserBucketQuota(t *testing.T) {
-	response, err := rgw.GetUserBucketQuota("test_quota")
+	quota, err := rgw.GetUserBucketQuota("quota-user")
 	if err != nil {
 		return
 	}
-	fmt.Println(response)
+	fmt.Println(quota)
 }
 
 func TestRgwClient_GetBucketInfo(t *testing.T) {
-	response, err := rgw.GetBucketInfo("test_quota", "test-bkt")
+	bucketInfo, err := rgw.GetBucketInfo("quota-user", "test")
 	if err != nil {
 		return
 	}
-	fmt.Println(response)
+	fmt.Println(bucketInfo)
 }
