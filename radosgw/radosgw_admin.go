@@ -2,34 +2,51 @@ package radosgw
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 
+	"github.com/google/go-querystring/query"
 	"github.com/regenttsui/s3box/utils"
 )
 
 type UserInfo struct {
-	Tenant               string       `json:"tenant"`
-	UserID               string       `json:"user_id"`
-	DisplayName          string       `json:"display_name"`
-	Email                string       `json:"email"`
-	Suspended            int64        `json:"suspended"`
-	MaxBuckets           int64        `json:"max_buckets"`
-	Subusers             []Subuser    `json:"subusers"`
-	Keys                 []KeyClass   `json:"keys"`
-	SwiftKeys            []KeyClass   `json:"swift_keys"`
-	Caps                 []Capability `json:"caps"`
-	OpMask               string       `json:"op_mask"`
-	System               string       `json:"system"`
-	Admin                string       `json:"admin"`
-	AccessStorageClasses int64        `json:"access_storage_classes"`
-	BucketQuota          Quota        `json:"bucket_quota"`
-	UserQuota            Quota        `json:"user_quota"`
-	// TempURLKeys          []interface{} `json:"temp_url_keys"`
-	Type string `json:"type"`
-	// MfaIDS               []interface{} `json:"mfa_ids"`
-	Stats Stats `json:"stats"`
+	Tenant      string       `json:"tenant"`
+	UserID      string       `json:"user_id"`
+	DisplayName string       `json:"display_name"`
+	Email       string       `json:"email"`
+	Suspended   int64        `json:"suspended"`
+	MaxBuckets  int64        `json:"max_buckets"`
+	Subusers    []Subuser    `json:"subusers"`
+	Keys        []KeyClass   `json:"keys"`
+	SwiftKeys   []KeyClass   `json:"swift_keys"`
+	Caps        []Capability `json:"caps"`
+	OpMask      string       `json:"op_mask"`
+	System      string       `json:"system"`
+	Admin       string       `json:"admin"`
+	BucketQuota Quota        `json:"bucket_quota"`
+	UserQuota   Quota        `json:"user_quota"`
+	TempURLKeys []string     `json:"temp_url_keys"`
+	Type        string       `json:"type"`
+	MfaIDS      []string     `json:"mfa_ids"`
+	Stats       Stats        `json:"stats"`
+}
+
+type UserConf struct {
+	Uid         string `url:"uid,omitempty"`
+	DisplayName string `url:"display-name,omitempty"`
+	Email       string `url:"email,omitempty"`
+	KeyType     string `url:"key-type,omitempty"`
+	AccessKey   string `url:"access-key,omitempty"`
+	SecretKey   string `url:"secret-key,omitempty"`
+	UserCaps    string `url:"user-caps,omitempty"`
+	GenerateKey bool   `url:"generate-key,omitempty"`
+	Suspended   int64  `url:"suspended,omitempty"`
+	MaxBuckets  int64  `url:"max-buckets,omitempty"`
+	Tenant      string `url:"tenant,omitempty"`
+	System      bool   `url:"system,omitempty"`
+	OpMask      string `url:"op-mask,omitempty"`
 }
 
 type Subuser struct {
@@ -38,8 +55,8 @@ type Subuser struct {
 }
 
 type Capability struct {
-	Perm string `json:"perm"`
 	Type string `json:"type"`
+	Perm string `json:"perm"`
 }
 
 type Quota struct {
@@ -232,4 +249,220 @@ func (rgw *RgwClient) GetBucketInfo(uid, bucketName string) (*BucketInfo, error)
 	}
 
 	return &bucketInfo, err
+}
+
+// GetUserInfo stats should be "True" or "False"
+func (rgw *RgwClient) GetUserInfo(uid, stats string) (*UserInfo, error) {
+	url := fmt.Sprintf("%s/admin/user?uid=%s&stats=%s", *rgw.config.Endpoint, uid, stats)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if err != nil {
+		return nil, err
+	}
+
+	buff, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var userInfo UserInfo
+	err = json.Unmarshal(buff, &userInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	return &userInfo, err
+}
+
+func (rgw *RgwClient) CreateUser(userConf *UserConf) (*UserInfo, error) {
+	if userConf.Uid == "" {
+		return nil, errors.New("uid is required")
+	}
+	if userConf.DisplayName == "" {
+		return nil, errors.New("displayName is required")
+	}
+
+	v, _ := query.Values(userConf)
+	url := fmt.Sprintf("%s/admin/user?%s", *rgw.config.Endpoint, v.Encode())
+	req, err := http.NewRequest("PUT", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if err != nil {
+		return nil, err
+	}
+
+	buff, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var userInfo UserInfo
+	err = json.Unmarshal(buff, &userInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	return &userInfo, err
+}
+
+func (rgw *RgwClient) ModifyUser(userConf *UserConf) (*UserInfo, error) {
+	if userConf.Uid == "" {
+		return nil, errors.New("uid is required")
+	}
+
+	v, _ := query.Values(userConf)
+	url := fmt.Sprintf("%s/admin/user?%s", *rgw.config.Endpoint, v.Encode())
+	req, err := http.NewRequest("POST", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if err != nil {
+		return nil, err
+	}
+
+	buff, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var userInfo UserInfo
+	err = json.Unmarshal(buff, &userInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	return &userInfo, err
+}
+
+func (rgw *RgwClient) RemoveUser(uid string) (*http.Response, error) {
+	if uid == "" {
+		return nil, errors.New("uid is required")
+	}
+
+	url := fmt.Sprintf("%s/admin/user?uid=%s", *rgw.config.Endpoint, uid)
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := rgw.buildSignerV2AndSendReq(req)
+
+	return resp, err
+}
+
+func (rgw *RgwClient) CreateKey(userConf *UserConf) (*[]KeyClass, error) {
+	if userConf.Uid == "" {
+		return nil, errors.New("uid is required")
+	}
+
+	v, _ := query.Values(userConf)
+	url := fmt.Sprintf("%s/admin/user?key&%s", *rgw.config.Endpoint, v.Encode())
+	req, err := http.NewRequest("PUT", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if err != nil {
+		return nil, err
+	}
+
+	buff, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var key []KeyClass
+	err = json.Unmarshal(buff, &key)
+	if err != nil {
+		return nil, err
+	}
+
+	return &key, err
+}
+
+func (rgw *RgwClient) RemoveKey(userConf *UserConf) (*http.Response, error) {
+	if userConf.AccessKey == "" {
+		return nil, errors.New("access-key is required")
+	}
+
+	v, _ := query.Values(userConf)
+	url := fmt.Sprintf("%s/admin/user?key&%s", *rgw.config.Endpoint, v.Encode())
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := rgw.buildSignerV2AndSendReq(req)
+
+	return resp, err
+}
+
+func (rgw *RgwClient) AddCaps(uid, caps string) (*[]Capability, error) {
+	if uid == "" {
+		return nil, errors.New("uid is required")
+	}
+
+	url := fmt.Sprintf("%s/admin/user?caps&uid=%s&user-caps=%s", *rgw.config.Endpoint, uid, caps)
+	req, err := http.NewRequest("PUT", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if err != nil {
+		return nil, err
+	}
+
+	buff, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var allCaps []Capability
+	err = json.Unmarshal(buff, &allCaps)
+	if err != nil {
+		return nil, err
+	}
+
+	return &allCaps, err
+}
+
+func (rgw *RgwClient) RemoveCaps(uid, caps string) (*[]Capability, error) {
+	if uid == "" {
+		return nil, errors.New("uid is required")
+	}
+
+	url := fmt.Sprintf("%s/admin/user?caps&uid=%s&user-caps=%s", *rgw.config.Endpoint, uid, caps)
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if err != nil {
+		return nil, err
+	}
+
+	buff, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var allCaps []Capability
+	err = json.Unmarshal(buff, &allCaps)
+	if err != nil {
+		return nil, err
+	}
+
+	return &allCaps, err
 }

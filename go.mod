@@ -7,4 +7,7 @@ require (
 	github.com/beevik/etree v1.2.0
 )
 
-require github.com/jmespath/go-jmespath v0.4.0 // indirect
+require (
+	github.com/google/go-querystring v1.1.0
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
+)
