@@ -8,17 +8,17 @@ import (
 	"time"
 )
 
-type RgwClient struct {
+type RGWClient struct {
 	config *aws.Config
 }
 
-func NewRgwClient(conf *aws.Config) *RgwClient {
+func NewRGWClient(conf *aws.Config) *RGWClient {
 	*conf.Endpoint = strings.TrimRight(*conf.Endpoint, "/")
-	client := &RgwClient{config: conf}
+	client := &RGWClient{config: conf}
 	return client
 }
 
-func (rgw *RgwClient) buildSignerV2AndSendReq(req *http.Request) (*http.Response, error) {
+func (rgw *RGWClient) buildSignerV2AndSendReq(req *http.Request) (*http.Response, error) {
 	signer := s3box.NewSigner(*rgw.config, time.Now())
 	err := signer.Sign(req)
 	if err != nil {

@@ -8,18 +8,11 @@ import (
 	"testing"
 )
 
-var (
-	svc *s3.S3
-)
-
-func init() {
-	svc = BuildClient()
-}
-
-func BuildClient() *s3.S3 {
+func buildS3Client(t *testing.T) *s3.S3 {
+	t.Helper()
 	conf := &aws.Config{
 		Endpoint:         aws.String("http://endpoint/"),
-		Region:           aws.String("fake-region"),
+		Region:           aws.String("mock-region"),
 		S3ForcePathStyle: aws.Bool(true),
 		DisableSSL:       aws.Bool(true),
 		Credentials:      credentials.NewStaticCredentials("ak", "sk", ""),
@@ -31,6 +24,7 @@ func BuildClient() *s3.S3 {
 }
 
 func TestBucketCleaner_DeleteAllBuckets(t *testing.T) {
+	svc := buildS3Client(t)
 	bc := NewBucketCleaner(svc)
 	err := bc.DeleteAllBuckets("abc")
 	if err != nil {
@@ -39,6 +33,7 @@ func TestBucketCleaner_DeleteAllBuckets(t *testing.T) {
 }
 
 func TestBucketCleaner_EmptyBucket(t *testing.T) {
+	svc := buildS3Client(t)
 	bc := NewBucketCleaner(svc)
 	err := bc.EmptyBucket("abc", 5, 1000, true, false)
 	if err != nil {

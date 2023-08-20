@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func (rgw *RgwClient) AppendObjV2(bucketName, objKey string, position uint64, body io.ReadSeeker) (*http.Response, error) {
+func (rgw *RGWClient) AppendObjV2(bucketName, objKey string, position uint64, body io.ReadSeeker) (*http.Response, error) {
 	url := fmt.Sprintf("%s/%s/%s?append&position=%d", *rgw.config.Endpoint, bucketName, objKey, position)
 	req, err := http.NewRequest("PUT", url, body)
 	if err != nil {
@@ -26,7 +26,7 @@ func (rgw *RgwClient) AppendObjV2(bucketName, objKey string, position uint64, bo
 	return resp, err
 }
 
-func (rgw *RgwClient) AppendObjV4(bucketName, objKey string, position uint64, body io.ReadSeeker) (*http.Response, error) {
+func (rgw *RGWClient) AppendObjV4(bucketName, objKey string, position uint64, body io.ReadSeeker) (*http.Response, error) {
 	url := fmt.Sprintf("%s/%s/%s?append&position=%d", *rgw.config.Endpoint, bucketName, objKey, position)
 	req, err := http.NewRequest("PUT", url, body)
 	if err != nil {

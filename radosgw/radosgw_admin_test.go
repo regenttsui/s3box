@@ -7,7 +7,8 @@ import (
 	"testing"
 )
 
-func TestRgwClient_PutUserQuota(t *testing.T) {
+func TestRGWClient_PutUserQuota(t *testing.T) {
+	rgw := buildRGWClient(t)
 	quota := Quota{
 		Enabled:    false,
 		CheckOnRaw: false,
@@ -28,7 +29,8 @@ func TestRgwClient_PutUserQuota(t *testing.T) {
 	fmt.Println(response)
 }
 
-func TestRgwClient_PutUserBucketQuota(t *testing.T) {
+func TestRGWClient_PutUserBucketQuota(t *testing.T) {
+	rgw := buildRGWClient(t)
 	quota := Quota{
 		Enabled:    true,
 		CheckOnRaw: false,
@@ -48,7 +50,8 @@ func TestRgwClient_PutUserBucketQuota(t *testing.T) {
 	fmt.Println(response)
 }
 
-func TestRgwClient_PutBucketQuota(t *testing.T) {
+func TestRGWClient_PutBucketQuota(t *testing.T) {
+	rgw := buildRGWClient(t)
 	quota := Quota{
 		Enabled:    false,
 		CheckOnRaw: false,
@@ -68,7 +71,8 @@ func TestRgwClient_PutBucketQuota(t *testing.T) {
 	fmt.Println(response)
 }
 
-func TestRgwClient_GetUserQuota(t *testing.T) {
+func TestRGWClient_GetUserQuota(t *testing.T) {
+	rgw := buildRGWClient(t)
 	quota, err := rgw.GetUserQuota("quota-user")
 	if err != nil {
 		return
@@ -76,7 +80,8 @@ func TestRgwClient_GetUserQuota(t *testing.T) {
 	fmt.Println(quota)
 }
 
-func TestRgwClient_GetUserBucketQuota(t *testing.T) {
+func TestRGWClient_GetUserBucketQuota(t *testing.T) {
+	rgw := buildRGWClient(t)
 	quota, err := rgw.GetUserBucketQuota("quota-user")
 	if err != nil {
 		return
@@ -84,7 +89,8 @@ func TestRgwClient_GetUserBucketQuota(t *testing.T) {
 	fmt.Println(quota)
 }
 
-func TestRgwClient_GetBucketInfo(t *testing.T) {
+func TestRGWClient_GetBucketInfo(t *testing.T) {
+	rgw := buildRGWClient(t)
 	bucketInfo, err := rgw.GetBucketInfo("quota-user", "test")
 	if err != nil {
 		return
@@ -92,16 +98,18 @@ func TestRgwClient_GetBucketInfo(t *testing.T) {
 	fmt.Println(bucketInfo)
 }
 
-func TestRgwClient_GetUserInfo(t *testing.T) {
+func TestRGWClient_GetUserInfo(t *testing.T) {
+	rgw := buildRGWClient(t)
 	got, err := rgw.GetUserInfo("testid", "True")
 	if err != nil {
-		t.Errorf("RgwClient.GetUserInfo() error = %v", err)
+		t.Errorf("RGWClient.GetUserInfo() error = %v", err)
 		return
 	}
 	t.Log(got)
 }
 
-func TestRgwClient_CreateUser(t *testing.T) {
+func TestRGWClient_CreateUser(t *testing.T) {
+	rgw := buildRGWClient(t)
 	userConf := UserConf{
 		Uid:         "new-user",
 		DisplayName: "dis-new-user",
@@ -119,13 +127,14 @@ func TestRgwClient_CreateUser(t *testing.T) {
 	}
 	got, err := rgw.CreateUser(&userConf)
 	if err != nil {
-		t.Errorf("RgwClient.CreateUser() error = %v", err)
+		t.Errorf("RGWClient.CreateUser() error = %v", err)
 		return
 	}
 	t.Log(got)
 }
 
-func TestRgwClient_ModifyUser(t *testing.T) {
+func TestRGWClient_ModifyUser(t *testing.T) {
+	rgw := buildRGWClient(t)
 	userConf := UserConf{
 		Uid:         "new-user",
 		DisplayName: "dis-new-user",
@@ -143,22 +152,24 @@ func TestRgwClient_ModifyUser(t *testing.T) {
 	}
 	got, err := rgw.ModifyUser(&userConf)
 	if err != nil {
-		t.Errorf("RgwClient.ModifyUser() error = %v", err)
+		t.Errorf("RGWClient.ModifyUser() error = %v", err)
 		return
 	}
 	t.Log(got)
 }
 
-func TestRgwClient_RemoveUser(t *testing.T) {
+func TestRGWClient_RemoveUser(t *testing.T) {
+	rgw := buildRGWClient(t)
 	got, err := rgw.RemoveUser("new-user")
 	if err != nil {
-		t.Errorf("RgwClient.RemoveUser() error = %v", err)
+		t.Errorf("RGWClient.RemoveUser() error = %v", err)
 		return
 	}
 	t.Log(got)
 }
 
-func TestRgwClient_CreateKey(t *testing.T) {
+func TestRGWClient_CreateKey(t *testing.T) {
+	rgw := buildRGWClient(t)
 	userConf := UserConf{
 		Uid:       "new-user",
 		KeyType:   "s3",
@@ -167,13 +178,14 @@ func TestRgwClient_CreateKey(t *testing.T) {
 	}
 	got, err := rgw.CreateKey(&userConf)
 	if err != nil {
-		t.Errorf("RgwClient.CreateKey() error = %v", err)
+		t.Errorf("RGWClient.CreateKey() error = %v", err)
 		return
 	}
 	t.Log(got)
 }
 
-func TestRgwClient_RemoveKey(t *testing.T) {
+func TestRGWClient_RemoveKey(t *testing.T) {
+	rgw := buildRGWClient(t)
 	userConf := UserConf{
 		Uid:       "new-user",
 		KeyType:   "s3",
@@ -181,25 +193,27 @@ func TestRgwClient_RemoveKey(t *testing.T) {
 	}
 	got, err := rgw.RemoveKey(&userConf)
 	if err != nil {
-		t.Errorf("RgwClient.RemoveKey() error = %v", err)
+		t.Errorf("RGWClient.RemoveKey() error = %v", err)
 		return
 	}
 	t.Log(got)
 }
 
-func TestRgwClient_AddCaps(t *testing.T) {
+func TestRGWClient_AddCaps(t *testing.T) {
+	rgw := buildRGWClient(t)
 	got, err := rgw.AddCaps("new-user", "users=write")
 	if err != nil {
-		t.Errorf("RgwClient.AddCaps() error = %v", err)
+		t.Errorf("RGWClient.AddCaps() error = %v", err)
 		return
 	}
 	t.Log(got)
 }
 
-func TestRgwClient_RemoveCaps(t *testing.T) {
+func TestRGWClient_RemoveCaps(t *testing.T) {
+	rgw := buildRGWClient(t)
 	got, err := rgw.RemoveCaps("new-user", "users=write")
 	if err != nil {
-		t.Errorf("RgwClient.RemoveCaps() error = %v", err)
+		t.Errorf("RGWClient.RemoveCaps() error = %v", err)
 		return
 	}
 	t.Log(got)

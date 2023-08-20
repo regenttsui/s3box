@@ -108,10 +108,10 @@ type BucketInfoElement struct {
 }
 
 type Usage struct {
-	RgwMain RgwMain `json:"rgw.main"`
+	RGWMain RGWMain `json:"rgw.main"`
 }
 
-type RgwMain struct {
+type RGWMain struct {
 	Size           int64 `json:"size"`
 	SizeActual     int64 `json:"size_actual"`
 	SizeUtilized   int64 `json:"size_utilized"`
@@ -121,7 +121,7 @@ type RgwMain struct {
 	NumObjects     int64 `json:"num_objects"`
 }
 
-func (rgw *RgwClient) PutUserQuota(uid string, body io.ReadSeeker) (*http.Response, error) {
+func (rgw *RGWClient) PutUserQuota(uid string, body io.ReadSeeker) (*http.Response, error) {
 	url := fmt.Sprintf("%s/admin/user?quota&uid=%s&quota-type=user", *rgw.config.Endpoint, uid)
 	req, err := http.NewRequest("PUT", url, body)
 	if err != nil {
@@ -138,7 +138,7 @@ func (rgw *RgwClient) PutUserQuota(uid string, body io.ReadSeeker) (*http.Respon
 	return resp, err
 }
 
-func (rgw *RgwClient) PutUserBucketQuota(uid string, body io.ReadSeeker) (*http.Response, error) {
+func (rgw *RGWClient) PutUserBucketQuota(uid string, body io.ReadSeeker) (*http.Response, error) {
 	url := fmt.Sprintf("%s/admin/user?quota&uid=%s&quota-type=bucket", *rgw.config.Endpoint, uid)
 	req, err := http.NewRequest("PUT", url, body)
 	if err != nil {
@@ -155,7 +155,7 @@ func (rgw *RgwClient) PutUserBucketQuota(uid string, body io.ReadSeeker) (*http.
 	return resp, err
 }
 
-func (rgw *RgwClient) PutBucketQuota(uid, bucketName string, body io.ReadSeeker) (*http.Response, error) {
+func (rgw *RGWClient) PutBucketQuota(uid, bucketName string, body io.ReadSeeker) (*http.Response, error) {
 	url := fmt.Sprintf("%s/admin/bucket?quota&uid=%s&bucket=%s", *rgw.config.Endpoint, uid, bucketName)
 	req, err := http.NewRequest("PUT", url, body)
 	if err != nil {
@@ -172,7 +172,7 @@ func (rgw *RgwClient) PutBucketQuota(uid, bucketName string, body io.ReadSeeker)
 	return resp, err
 }
 
-func (rgw *RgwClient) GetUserQuota(uid string) (*Quota, error) {
+func (rgw *RGWClient) GetUserQuota(uid string) (*Quota, error) {
 	url := fmt.Sprintf("%s/admin/user?quota&uid=%s&quota-type=user", *rgw.config.Endpoint, uid)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -198,7 +198,7 @@ func (rgw *RgwClient) GetUserQuota(uid string) (*Quota, error) {
 	return &quota, err
 }
 
-func (rgw *RgwClient) GetUserBucketQuota(uid string) (*Quota, error) {
+func (rgw *RGWClient) GetUserBucketQuota(uid string) (*Quota, error) {
 	url := fmt.Sprintf("%s/admin/user?quota&uid=%s&quota-type=bucket", *rgw.config.Endpoint, uid)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -225,7 +225,7 @@ func (rgw *RgwClient) GetUserBucketQuota(uid string) (*Quota, error) {
 }
 
 // GetBucketInfo aka GetBucketQuota/GetBucketStats
-func (rgw *RgwClient) GetBucketInfo(uid, bucketName string) (*BucketInfo, error) {
+func (rgw *RGWClient) GetBucketInfo(uid, bucketName string) (*BucketInfo, error) {
 	url := fmt.Sprintf("%s/admin/bucket?uid=%s&bucket=%s&stats=True", *rgw.config.Endpoint, uid, bucketName)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -252,7 +252,7 @@ func (rgw *RgwClient) GetBucketInfo(uid, bucketName string) (*BucketInfo, error)
 }
 
 // GetUserInfo stats should be "True" or "False"
-func (rgw *RgwClient) GetUserInfo(uid, stats string) (*UserInfo, error) {
+func (rgw *RGWClient) GetUserInfo(uid, stats string) (*UserInfo, error) {
 	url := fmt.Sprintf("%s/admin/user?uid=%s&stats=%s", *rgw.config.Endpoint, uid, stats)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -278,7 +278,7 @@ func (rgw *RgwClient) GetUserInfo(uid, stats string) (*UserInfo, error) {
 	return &userInfo, err
 }
 
-func (rgw *RgwClient) CreateUser(userConf *UserConf) (*UserInfo, error) {
+func (rgw *RGWClient) CreateUser(userConf *UserConf) (*UserInfo, error) {
 	if userConf.Uid == "" {
 		return nil, errors.New("uid is required")
 	}
@@ -312,7 +312,7 @@ func (rgw *RgwClient) CreateUser(userConf *UserConf) (*UserInfo, error) {
 	return &userInfo, err
 }
 
-func (rgw *RgwClient) ModifyUser(userConf *UserConf) (*UserInfo, error) {
+func (rgw *RGWClient) ModifyUser(userConf *UserConf) (*UserInfo, error) {
 	if userConf.Uid == "" {
 		return nil, errors.New("uid is required")
 	}
@@ -343,7 +343,7 @@ func (rgw *RgwClient) ModifyUser(userConf *UserConf) (*UserInfo, error) {
 	return &userInfo, err
 }
 
-func (rgw *RgwClient) RemoveUser(uid string) (*http.Response, error) {
+func (rgw *RGWClient) RemoveUser(uid string) (*http.Response, error) {
 	if uid == "" {
 		return nil, errors.New("uid is required")
 	}
@@ -359,7 +359,7 @@ func (rgw *RgwClient) RemoveUser(uid string) (*http.Response, error) {
 	return resp, err
 }
 
-func (rgw *RgwClient) CreateKey(userConf *UserConf) (*[]KeyClass, error) {
+func (rgw *RGWClient) CreateKey(userConf *UserConf) (*[]KeyClass, error) {
 	if userConf.Uid == "" {
 		return nil, errors.New("uid is required")
 	}
@@ -390,7 +390,7 @@ func (rgw *RgwClient) CreateKey(userConf *UserConf) (*[]KeyClass, error) {
 	return &key, err
 }
 
-func (rgw *RgwClient) RemoveKey(userConf *UserConf) (*http.Response, error) {
+func (rgw *RGWClient) RemoveKey(userConf *UserConf) (*http.Response, error) {
 	if userConf.AccessKey == "" {
 		return nil, errors.New("access-key is required")
 	}
@@ -407,7 +407,7 @@ func (rgw *RgwClient) RemoveKey(userConf *UserConf) (*http.Response, error) {
 	return resp, err
 }
 
-func (rgw *RgwClient) AddCaps(uid, caps string) (*[]Capability, error) {
+func (rgw *RGWClient) AddCaps(uid, caps string) (*[]Capability, error) {
 	if uid == "" {
 		return nil, errors.New("uid is required")
 	}
@@ -437,7 +437,7 @@ func (rgw *RgwClient) AddCaps(uid, caps string) (*[]Capability, error) {
 	return &allCaps, err
 }
 
-func (rgw *RgwClient) RemoveCaps(uid, caps string) (*[]Capability, error) {
+func (rgw *RGWClient) RemoveCaps(uid, caps string) (*[]Capability, error) {
 	if uid == "" {
 		return nil, errors.New("uid is required")
 	}
