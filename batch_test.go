@@ -5,6 +5,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	. "github.com/smartystreets/goconvey/convey"
 	"testing"
 )
 
@@ -26,17 +27,63 @@ func buildS3Client(t *testing.T) *s3.S3 {
 func TestBucketCleaner_DeleteAllBuckets(t *testing.T) {
 	svc := buildS3Client(t)
 	bc := NewBucketCleaner(svc)
-	err := bc.DeleteAllBuckets("abc")
-	if err != nil {
-		return
-	}
+
+	Convey("TestBucketCleaner_DeleteAllBuckets", t, func() {
+		type args struct {
+			containedStr string
+		}
+		tests := []struct {
+			name    string
+			args    args
+			want    int
+			wantErr bool
+		}{
+			{"DeleteAllBuckets should success",
+				args{"abc"},
+				204,
+				false,
+			},
+		}
+
+		for _, tt := range tests {
+			Convey(tt.name, func() {
+				err := bc.DeleteAllBuckets(tt.args.containedStr)
+				So(err, ShouldBeNil)
+			})
+		}
+	})
 }
 
 func TestBucketCleaner_EmptyBucket(t *testing.T) {
 	svc := buildS3Client(t)
 	bc := NewBucketCleaner(svc)
-	err := bc.EmptyBucket("abc", 5, 1000, true, false)
-	if err != nil {
-		return
-	}
+
+	Convey("TestBucketCleaner_EmptyBucket", t, func() {
+		type args struct {
+			bucket          string
+			deleteWorkerNum int
+			objChanCap      int
+			multiDel        bool
+			deleteBucket    bool
+		}
+		tests := []struct {
+			name    string
+			args    args
+			want    int
+			wantErr bool
+		}{
+			{"EmptyBucket should success",
+				args{"abc", 5, 1000, true, false},
+				204,
+				false,
+			},
+		}
+
+		for _, tt := range tests {
+			Convey(tt.name, func() {
+				err := bc.EmptyBucket(tt.args.bucket, tt.args.deleteWorkerNum, tt.args.objChanCap, tt.args.multiDel, tt.args.deleteBucket)
+				So(err, ShouldBeNil)
+			})
+		}
+	})
 }

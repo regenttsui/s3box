@@ -10,7 +10,6 @@ import (
 	"time"
 )
 
-// BucketCleaner
 // TODO modify print of result and error
 type BucketCleaner struct {
 	svc          *s3.S3
