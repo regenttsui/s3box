@@ -16,7 +16,8 @@ func buildRGWClient(t *testing.T) *RGWClient {
 		S3ForcePathStyle: aws.Bool(true),
 		DisableSSL:       aws.Bool(true),
 		Credentials:      credentials.NewStaticCredentials("ak", "sk", ""),
-		LogLevel:         aws.LogLevel(aws.LogDebug),
+		LogLevel:         aws.LogLevel(aws.LogDebugWithSigning),
+		Logger:           aws.NewDefaultLogger(),
 	}
 	rgwClient := NewRGWClient(conf)
 	return rgwClient

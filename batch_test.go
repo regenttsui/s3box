@@ -17,7 +17,8 @@ func buildS3Client(t *testing.T) *s3.S3 {
 		S3ForcePathStyle: aws.Bool(true),
 		DisableSSL:       aws.Bool(true),
 		Credentials:      credentials.NewStaticCredentials("ak", "sk", ""),
-		//LogLevel:         aws.LogLevel(aws.LogDebug),
+		LogLevel:         aws.LogLevel(aws.LogDebugWithSigning),
+		Logger:           aws.NewDefaultLogger(),
 	}
 	sess := session.Must(session.NewSessionWithOptions(session.Options{Config: *conf}))
 	svc := s3.New(sess)
