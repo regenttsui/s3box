@@ -44,7 +44,7 @@ func (rgw *RGWClient) AppendObjV4(bucketName, objKey string, position uint64, bo
 		return nil, err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := rgw.httpClient.Do(req)
 
 	return resp, err
 }

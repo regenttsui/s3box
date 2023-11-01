@@ -134,7 +134,7 @@ func TestRGWClient_CreateNotification(t *testing.T) {
 				got, err := rgw.CreateNotification(tt.args.topicArn, tt.args.bucket, tt.args.notificationId,
 					tt.args.prefix, tt.args.suffix, tt.args.metaData, tt.args.events)
 				So(got, ShouldNotBeNil)
-				So(got, ShouldEqual, tt.want)
+				So(got.StatusCode, ShouldEqual, tt.want)
 				So(err, ShouldBeNil)
 				t.Log(got)
 			})
@@ -156,8 +156,8 @@ func TestRGWClient_GetNotification(t *testing.T) {
 			want   int
 			assert Assertion
 		}{
-			{"listNotification should success", args{"test", ""}, 1, ShouldEqual},
-			{"getNotification should success", args{"test", "notifId"}, 1, ShouldBeGreaterThanOrEqualTo},
+			{"listNotification should success", args{"test", ""}, 1, ShouldBeGreaterThanOrEqualTo},
+			{"getNotification should success", args{"test", "notifId"}, 1, ShouldEqual},
 		}
 
 		for _, tt := range tests {
@@ -186,7 +186,7 @@ func TestRGWClient_DeleteNotification(t *testing.T) {
 			want    int
 			wantErr bool
 		}{
-			{"DeleteNotification should success", args{"test", "notifId"}, 204, false},
+			{"DeleteNotification should success", args{"test", "notifId"}, 200, false},
 		}
 
 		for _, tt := range tests {

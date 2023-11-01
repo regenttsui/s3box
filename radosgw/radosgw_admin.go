@@ -180,6 +180,9 @@ func (rgw *RGWClient) GetUserQuota(uid string) (*Quota, error) {
 	}
 
 	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -206,10 +209,14 @@ func (rgw *RGWClient) GetUserBucketQuota(uid string) (*Quota, error) {
 	}
 
 	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return nil, err
 	}
 
+	//TODO handle not 200 response
 	buff, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -233,6 +240,9 @@ func (rgw *RGWClient) GetBucketInfo(uid, bucketName string) (*BucketInfo, error)
 	}
 
 	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -260,6 +270,9 @@ func (rgw *RGWClient) GetUserInfo(uid, stats string) (*UserInfo, error) {
 	}
 
 	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -294,6 +307,9 @@ func (rgw *RGWClient) CreateUser(userConf *UserConf) (*UserInfo, error) {
 	}
 
 	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -325,6 +341,9 @@ func (rgw *RGWClient) ModifyUser(userConf *UserConf) (*UserInfo, error) {
 	}
 
 	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -372,6 +391,9 @@ func (rgw *RGWClient) CreateKey(userConf *UserConf) (*[]KeyClass, error) {
 	}
 
 	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -419,6 +441,9 @@ func (rgw *RGWClient) AddCaps(uid, caps string) (*[]Capability, error) {
 	}
 
 	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -449,6 +474,9 @@ func (rgw *RGWClient) RemoveCaps(uid, caps string) (*[]Capability, error) {
 	}
 
 	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return nil, err
 	}

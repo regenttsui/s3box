@@ -4,13 +4,22 @@ import (
 	"encoding/base64"
 	"fmt"
 	. "github.com/smartystreets/goconvey/convey"
+	"net/http"
 	"testing"
 	"time"
 )
 
 func TestBoxClient_PostObject(t *testing.T) {
 	svc := buildS3Client(t)
-	bc := NewBoxClient(svc)
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConns:        50,
+			MaxConnsPerHost:     20,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     5 * time.Minute,
+		},
+	}
+	bc := NewBoxClient(svc, httpClient)
 
 	v, err := svc.Config.Credentials.Get()
 	if err != nil {

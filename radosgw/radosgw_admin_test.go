@@ -193,7 +193,7 @@ func TestRGWClient_GetBucketInfo(t *testing.T) {
 			want    string
 			wantErr bool
 		}{
-			{"GetBucketInfo should success", args{"quota-user", "test"}, "test", false},
+			{"GetBucketInfo should success", args{"quota-user", "test-bkt"}, "test-bkt", false},
 		}
 
 		for _, tt := range tests {

@@ -56,8 +56,7 @@ func (bc *BoxClient) PostObject(bucketName, objKey, date, encodedPolicy, region,
 	url := endpoint + "/" + bucketName
 	req, err := http.NewRequest("POST", url, body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := bc.httpClient.Do(req)
 
 	return resp, err
 }

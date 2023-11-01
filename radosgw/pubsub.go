@@ -133,6 +133,9 @@ func (rgw *RGWClient) ListTopics() (*ListTopicsResponse, error) {
 	}
 
 	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -160,6 +163,9 @@ func (rgw *RGWClient) CreateTopic(topicName, pushEndpoint string) (string, error
 	}
 
 	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return "", err
 	}
@@ -187,6 +193,9 @@ func (rgw *RGWClient) GetTopic(topicArn string) (*GetTopicResponse, error) {
 	}
 
 	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -257,6 +266,9 @@ func (rgw *RGWClient) GetNotification(bucket, notificationId string) (*Notificat
 	}
 
 	resp, err := rgw.buildSignerV2AndSendReq(req)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return nil, err
 	}
