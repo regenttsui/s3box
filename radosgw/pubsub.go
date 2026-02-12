@@ -16,6 +16,21 @@ type (
 	TagFilter      map[string]string
 )
 
+// ErrorResponse represents an AWS S3/RGW error response
+// Format: <Error><Code>...</Code><Message>...</Message><Resource>...</Resource><RequestId>...</RequestId></Error>
+type ErrorResponse struct {
+	XMLName   xml.Name `xml:"Error"`
+	Text      string   `xml:",chardata"`
+	Code      string   `xml:"Code"`
+	Message   string   `xml:"Message"`
+	Resource  string   `xml:"Resource"`
+	RequestId string   `xml:"RequestId"`
+}
+
+func (e *ErrorResponse) Error() string {
+	return fmt.Sprintf("%s: %s (RequestId: %s)", e.Code, e.Message, e.RequestId)
+}
+
 type ListTopicsResponse struct {
 	XMLName          xml.Name `xml:"ListTopicsResponse"`
 	Text             string   `xml:",chardata"`
@@ -145,6 +160,15 @@ func (rgw *RGWClient) ListTopics() (*ListTopicsResponse, error) {
 		return nil, err
 	}
 
+	// Check HTTP status code
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		var errResp ErrorResponse
+		if err := xml.Unmarshal(buff, &errResp); err == nil && errResp.Code != "" {
+			return nil, &errResp
+		}
+		return nil, fmt.Errorf("request failed with status code %d: %s", resp.StatusCode, string(buff))
+	}
+
 	var topics ListTopicsResponse
 	err = xml.Unmarshal(buff, &topics)
 	if err != nil {
@@ -173,6 +197,15 @@ func (rgw *RGWClient) CreateTopic(topicName, pushEndpoint string) (string, error
 	buff, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
+	}
+
+	// Check HTTP status code
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		var errResp ErrorResponse
+		if err := xml.Unmarshal(buff, &errResp); err == nil && errResp.Code != "" {
+			return "", &errResp
+		}
+		return "", fmt.Errorf("request failed with status code %d: %s", resp.StatusCode, string(buff))
 	}
 
 	var topic CreateTopicResponse
@@ -207,6 +240,15 @@ func (rgw *RGWClient) GetTopic(topicArn string) (*GetTopicResponse, error) {
 	buff, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
+	}
+
+	// Check HTTP status code for other errors
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		var errResp ErrorResponse
+		if err := xml.Unmarshal(buff, &errResp); err == nil && errResp.Code != "" {
+			return nil, &errResp
+		}
+		return nil, fmt.Errorf("request failed with status code %d: %s", resp.StatusCode, string(buff))
 	}
 
 	var topic GetTopicResponse
@@ -280,6 +322,15 @@ func (rgw *RGWClient) GetNotification(bucket, notificationId string) (*Notificat
 	buff, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
+	}
+
+	// Check HTTP status code for other errors
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		var errResp ErrorResponse
+		if err := xml.Unmarshal(buff, &errResp); err == nil && errResp.Code != "" {
+			return nil, &errResp
+		}
+		return nil, fmt.Errorf("request failed with status code %d: %s", resp.StatusCode, string(buff))
 	}
 
 	var notif NotificationConfiguration
